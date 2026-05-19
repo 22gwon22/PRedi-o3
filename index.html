@@ -1,19 +1,40 @@
-import React, { useEffect, useMemo, useState } from "react";
-import * as XLSX from "xlsx";
-
-const exemploEscala = `DATA;PLACA;REBOQUE;ROTA;MOTORISTA;TROCA_DE_TURNO;SAIDA_PROGRAMADA;RETORNO_PREV;TEMPO;NECESSIDADE_MANUTEN;OBSERVACAO_ESCALA
+<!doctype html>
+<html lang="pt-BR">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Predição de Rotas CCO</title>
+  <script src="https://cdn.jsdelivr.net/npm/xlsx@0.18.5/dist/xlsx.full.min.js"></script>
+  <style>
+    :root{--bg:#07101f;--card:#0f172a;--line:#1e293b;--text:#e2e8f0;--muted:#94a3b8;--cyan:#22d3ee;--red:#ef4444;--amber:#f59e0b;--green:#10b981}
+    *{box-sizing:border-box} body{margin:0;background:radial-gradient(circle at top left,#0b2d44 0,#07101f 35%,#050914 100%);color:var(--text);font-family:system-ui,-apple-system,Segoe UI,Roboto,Arial,sans-serif}.wrap{max-width:1440px;margin:auto;padding:24px}.card{background:rgba(15,23,42,.86);border:1px solid var(--line);border-radius:18px;padding:18px;box-shadow:0 20px 60px rgba(0,0,0,.25)}h1{margin:4px 0 8px;font-size:30px}.sub{color:var(--muted);font-size:14px}.top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap}.kpis{display:grid;grid-template-columns:repeat(4,110px);gap:10px}.kpi{border-radius:16px;padding:14px;text-align:center;border:1px solid var(--line);background:#0b1220}.kpi b{font-size:30px;display:block}.red{color:var(--red)}.amber{color:var(--amber)}.green{color:var(--green)}.cyan{color:var(--cyan)}button,.file{border:1px solid var(--line);background:#111827;color:var(--text);border-radius:12px;padding:10px 14px;cursor:pointer;font-weight:700;font-size:14px}button:hover,.file:hover{background:#1f2937}.primary{background:var(--cyan);color:#06121f;border-color:var(--cyan)}.danger{color:#fecaca;border-color:#7f1d1d;background:#2a1118}.tabs{display:flex;gap:8px;border-bottom:1px solid var(--line);margin:18px 0}.tabs button{border-bottom-left-radius:0;border-bottom-right-radius:0}.active{color:var(--cyan);background:#172033}.actions{display:flex;gap:8px;flex-wrap:wrap;margin-top:16px}.msg{margin-top:12px;color:#cffafe;background:#083344;border:1px solid #155e75;padding:10px 12px;border-radius:12px}table{border-collapse:collapse;width:100%;min-width:1180px}th{background:#111827;color:#94a3b8;font-size:12px;text-transform:uppercase;letter-spacing:.06em;text-align:left}td,th{border-bottom:1px solid var(--line);padding:12px;vertical-align:top}tbody tr:hover{background:rgba(255,255,255,.03)}.pill{border-radius:999px;padding:4px 10px;font-size:12px;font-weight:800;display:inline-block;border:1px solid}.alto{background:#3b0d12;color:#fecaca;border-color:#7f1d1d}.medio{background:#3a2a0a;color:#fde68a;border-color:#92400e}.baixo{background:#062e22;color:#bbf7d0;border-color:#047857}.mini{font-size:12px;color:var(--muted)}textarea{width:100%;min-height:200px;background:#020617;color:#dbeafe;border:1px solid var(--line);border-radius:14px;padding:12px;font-family:ui-monospace,SFMono-Regular,Menlo,monospace;font-size:12px}.grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(480px,1fr));gap:14px}.ij{background:#020617;border:1px solid #1f2937;border-radius:12px;padding:8px;margin-bottom:8px}.ij b{font-size:12px}.row-actions{display:flex;gap:8px;flex-wrap:wrap}.small{font-size:12px}.nowrap{white-space:nowrap}.list{margin:0;padding-left:18px}.hist{max-height:520px;overflow:auto}.code{font-family:ui-monospace,SFMono-Regular,Menlo,monospace;background:#020617;border:1px solid var(--line);padding:10px;border-radius:12px;color:#cbd5e1;white-space:pre-wrap}
+  </style>
+</head>
+<body>
+<div class="wrap">
+  <header class="card">
+    <div class="top">
+      <div><div class="cyan small" style="letter-spacing:.18em;text-transform:uppercase;font-weight:800">CCO • Predição de Rotas</div><h1>Predição do dia seguinte</h1><div class="sub" id="periodo">Importe o Excel padrão e calcule os impactos do próximo dia.</div></div>
+      <div class="kpis"><div class="kpi"><b class="red" id="kAlto">0</b><span>Alto</span></div><div class="kpi"><b class="amber" id="kMedio">0</b><span>Médio</span></div><div class="kpi"><b class="green" id="kBaixo">0</b><span>Baixo</span></div><div class="kpi"><b class="cyan" id="kInter">0</b><span>Interj.</span></div></div>
+    </div>
+    <div class="actions"><label class="file primary">Importar Excel<input id="upload" type="file" accept=".xlsx,.xls" style="display:none"></label><button id="modelo">Baixar modelo Excel</button><button id="salvar">Salvar predição no histórico</button><button id="exportar">Exportar histórico</button><button id="limpar" class="danger">Limpar histórico</button></div>
+    <div id="msg" class="msg" style="display:none"></div>
+  </header>
+  <div class="tabs"><button data-tab="pred" class="active">Predição</button><button data-tab="dados">Dados importados</button><button data-tab="hist">Histórico</button><button data-tab="padrao">Padrão de importação</button></div>
+  <main id="content"></main>
+</div>
+<script>
+const exemploEscala=`DATA;PLACA;REBOQUE;ROTA;MOTORISTA;TROCA_DE_TURNO;SAIDA_PROGRAMADA;RETORNO_PREV;TEMPO;NECESSIDADE_MANUTEN;OBSERVACAO_ESCALA
 20/05/2026;SDZ9J31;*** - ****;PERDILANDIA 01D;ALISSONELES;***** - *****;08:00:00;17:00:00;12:00:00;BAIXO;
 20/05/2026;SDX2H31;*** - ****;PALMA DE OURO 01D;DOUGLAS;WILLIAN;04:00:00;20:00:00;17:00:00;BAIXO;
 20/05/2026;AFRG9G30;*** - ****;PA RESERVA 01D;FLAVIO TEIXEIRA;***** - *****;04:00:00;20:00:00;17:00:00;BAIXO;
 20/05/2026;TTA2F32;BAM0932;CAPINOPOLIS 01R;RELSON;DENILSON;07:00:00;22:00:00;15:00:00;BAIXO;
 20/05/2026;RHF7H26;PVA9G37;MONTE ALEGRE 02R;ANDERSON;***** - *****;06:00:00;22:00:00;15:00:00;BAIXO;`;
-
-const exemploOcorrencias = `DATA;ROTA;PLACA;SAIDA_REAL;FIM_REAL;MOTIVO;OBSERVACAO;STATUS_ROTA;KM_PREVISTO;KM_REALIZADO
+const exemploOcorrencias=`DATA;ROTA;PLACA;SAIDA_REAL;FIM_REAL;MOTIVO;OBSERVACAO;STATUS_ROTA;KM_PREVISTO;KM_REALIZADO
 19/05/2026;UNIÃO DE MINAS 02D;AFR9G30;04:09:00;;; ;RODANDO;;
 19/05/2026;SANTA VITÓRIA 02D;SDX2H31;;;Logística;Caminhão está na descarga - aguardando retorno da filial;ATRASO;;
 19/05/2026;CAPINOPOLIS 02D;TTA2F32;07:43:00;;; ;ATRASO;;`;
-
-const exemploDePara = `APELIDO;NOME_CORRETO
+const exemploDePara=`APELIDO;NOME_CORRETO
 ALISSONELES;ALISSONELES DE MOURA PRIMO
 WILLIAN;WILLIAN BATISTA DA SILVA
 ANDERSON;ANDERSON CLEITON DE LIMA
@@ -22,522 +43,56 @@ RELSON;RELSON CARLOS ALVES SIQUEIRA
 FLAVIO TEIXEIRA;FLAVIO LUIZ TEIXEIRA
 DENILSON;DENILSON
 MARCOS MARTINS;MARCOS MARTINS`;
-
-const exemploExcecoes = `MOTORISTA;MOTIVO
+const exemploExcecoes=`MOTORISTA;MOTIVO
 ANDERSON;Agregado`;
-
-const exemploEquipamentos = `PLACA;STATUS;OBSERVACAO
+const exemploEquip=`PLACA;STATUS;OBSERVACAO
 AFRG9G30;PARADO;
 SDX2H31;PARADO;
 TTO0I42;MANUTENÇÃO;`;
-
-const exemploParametros = `PARAMETRO;VALOR;DESCRICAO
+const exemploParam=`PARAMETRO;VALOR;DESCRICAO
 DATA_HOJE;19/05/2026;Dia das ocorrências usadas como base
 DATA_AMANHA;20/05/2026;Dia calculado
 INTERJORNADA_MINIMA_HORAS;11;Horas mínimas de descanso
 DURACAO_PADRAO_HORAS;12;Duração usada quando não houver TEMPO
 MARGEM_ALERTA_HORAS;1;Margem de atenção acima da interjornada`;
-
-function norm(v) {
-  return String(v ?? "").normalize("NFD").replace(/[\u0300-\u036f]/g, "").toUpperCase().trim();
-}
-function key(v) {
-  return norm(v).replace(/[^A-Z0-9]+/g, "_").replace(/^_+|_+$/g, "");
-}
-function placa(v) {
-  return norm(v).replace(/[^A-Z0-9]/g, "");
-}
-function nomeNorm(v) {
-  return norm(String(v ?? "").replace(/^\s*\(AG\)\s*/i, "")).replace(/[^A-Z0-9 ]/g, " ").replace(/\s+/g, " ").trim();
-}
-function parseCSV(txt) {
-  const linhas = String(txt || "").split(/\r?\n/).map((l) => l.trim()).filter(Boolean);
-  if (!linhas.length) return [];
-  const headerIndex = linhas.findIndex((l) => {
-    const n = norm(l);
-    return n.includes("DATA") && (n.includes("ROTA") || n.includes("PARAMETRO") || n.includes("PLACA") || n.includes("APELIDO") || n.includes("MOTORISTA"));
-  });
-  const start = headerIndex >= 0 ? headerIndex : 0;
-  const headers = linhas[start].split(";").map(key);
-  return linhas.slice(start + 1).map((linha) => {
-    const cols = linha.split(";");
-    const obj = {};
-    headers.forEach((h, i) => (obj[h] = (cols[i] ?? "").trim()));
-    return obj;
-  });
-}
-function get(row, nomes) {
-  for (const n of nomes) {
-    const v = row[key(n)];
-    if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
-  }
-  return "";
-}
-function minHora(h) {
-  if (!h || String(h).includes("--") || String(h).trim() === "-") return null;
-  const txt = String(h).trim().replace(/h/gi, ":");
-  const p = txt.split(":").map(Number);
-  if (p.length < 2 || Number.isNaN(p[0]) || Number.isNaN(p[1])) return null;
-  return p[0] * 60 + p[1];
-}
-function tempoParaMin(v) {
-  const m = minHora(v);
-  if (m !== null) return m;
-  const n = Number(String(v || "").replace(",", "."));
-  return Number.isNaN(n) ? null : n * 60;
-}
-function dataBR(d) {
-  const p = String(d || "").trim().split("/").map(Number);
-  if (p.length !== 3 || p.some(Number.isNaN)) return null;
-  return new Date(p[2], p[1] - 1, p[0], 0, 0, 0, 0);
-}
-function dataHoraMin(d, h) {
-  const base = dataBR(d);
-  const m = minHora(h);
-  if (!base || m === null) return null;
-  return Math.floor(base.getTime() / 60000) + m;
-}
-function dur(min) {
-  if (min === null || min === undefined || Number.isNaN(min)) return "sem dados";
-  const s = min < 0 ? "-" : "";
-  const a = Math.abs(Math.round(min));
-  return `${s}${String(Math.floor(a / 60)).padStart(2, "0")}h${String(a % 60).padStart(2, "0")}`;
-}
-function hora(abs) {
-  if (abs === null || abs === undefined || Number.isNaN(abs)) return "estimado";
-  const m = ((Math.round(abs) % 1440) + 1440) % 1440;
-  return `${String(Math.floor(m / 60)).padStart(2, "0")}:${String(m % 60).padStart(2, "0")}`;
-}
-function rotaBase(rota) {
-  return norm(rota).replace(/\b0?1[DR]?\b|\b0?2[DR]?\b/g, "").replace(/\s+/g, " ").trim();
-}
-function mapaDePara(txt) {
-  const m = new Map();
-  parseCSV(txt).forEach((r) => {
-    const de = get(r, ["APELIDO", "DE", "MOTORISTA"]);
-    const para = get(r, ["NOME_CORRETO", "PARA", "NOME COMPLETO"]);
-    if (de && para) m.set(nomeNorm(de), para);
-  });
-  return m;
-}
-function nomeCorreto(n, mapa) {
-  const limpo = String(n || "").replace(/^\s*\(AG\)\s*/i, "").trim();
-  if (!limpo || /\*{2,}/.test(limpo)) return "";
-  return mapa.get(nomeNorm(limpo)) || limpo;
-}
-function nomesDaEscala(motorista, troca, mapa) {
-  const base = String(motorista || "").split(/\||,|\/| E /i).map((n) => nomeCorreto(n, mapa)).filter(Boolean);
-  const trocaOk = troca && !/\*{2,}/.test(troca) && norm(troca) !== "TROCA DE TURNO";
-  const extra = trocaOk ? String(troca).split(/\||,|\/| E /i).map((n) => nomeCorreto(n, mapa)).filter(Boolean) : [];
-  const final = [...base];
-  extra.forEach((n) => {
-    if (!final.some((x) => nomeNorm(x) === nomeNorm(n))) final.push(n);
-  });
-  return final;
-}
-function motoristas(nomes) {
-  return nomes.map((nome, i) => ({ nome, norm: nomeNorm(nome), indice: i, total: nomes.length, papel: nomes.length === 1 ? "Jornada completa" : i === 0 ? "1º turno" : i === 1 ? "2º turno" : `${i + 1}º turno` }));
-}
-function compat(a, b) {
-  const na = nomeNorm(a), nb = nomeNorm(b);
-  if (!na || !nb) return false;
-  if (na === nb) return true;
-  const ta = na.split(" ").filter((t) => t.length >= 4);
-  const tb = nb.split(" ").filter((t) => t.length >= 4);
-  const iguais = ta.filter((t) => tb.includes(t));
-  return iguais.length >= 2 || (ta.length === 1 && iguais.length === 1) || (tb.length === 1 && iguais.length === 1);
-}
-function excecoesInterjornada(txt, mapa) {
-  const out = new Map();
-  parseCSV(txt).forEach((r) => {
-    const n = get(r, ["MOTORISTA", "NOME", "APELIDO"]);
-    const motivo = get(r, ["MOTIVO", "OBSERVACAO"]) || "Desconsiderado";
-    if (!n) return;
-    out.set(nomeNorm(n), motivo);
-    out.set(nomeNorm(nomeCorreto(n, mapa)), motivo);
-  });
-  return out;
-}
-function lerEscala(txt, mapa, durPadrao) {
-  return parseCSV(txt).map((r) => {
-    const data = get(r, ["DATA"]);
-    const rota = get(r, ["ROTA"]);
-    const inicio = get(r, ["SAIDA_PROGRAMADA", "SAÍDA PROGRAMADA", "SAIDA_ROTEIRIZADA", "INICIO"]);
-    const tempo = tempoParaMin(get(r, ["TEMPO", "DURACAO", "DURAÇÃO"]));
-    const retorno = get(r, ["RETORNO_PREV", "RETORNO_PREV.", "RETORNO PREVISTO"]);
-    const inicioAbs = dataHoraMin(data, inicio);
-    const retornoAbs = dataHoraMin(data, retorno);
-    let fimAbs = null;
-    if (inicioAbs !== null && tempo !== null) fimAbs = inicioAbs + tempo;
-    else if (inicioAbs !== null && retornoAbs !== null) fimAbs = retornoAbs <= inicioAbs ? retornoAbs + 1440 : retornoAbs;
-    else if (inicioAbs !== null) fimAbs = inicioAbs + durPadrao * 60;
-    const nomes = nomesDaEscala(get(r, ["MOTORISTA"]), get(r, ["TROCA_DE_TURNO", "TROCA DE TURNO"]), mapa);
-    return {
-      data,
-      rota,
-      rotaBase: rotaBase(rota),
-      placa: get(r, ["PLACA", "CAMINHAO", "CAMINHÃO"]),
-      placaNorm: placa(get(r, ["PLACA", "CAMINHAO", "CAMINHÃO"])),
-      reboque: get(r, ["REBOQUE"]),
-      reboqueNorm: placa(get(r, ["REBOQUE"])),
-      motorista: nomes.join(" | "),
-      motoristas: motoristas(nomes),
-      trocaOriginal: get(r, ["TROCA_DE_TURNO", "TROCA DE TURNO"]),
-      inicio,
-      inicioAbs,
-      fimAbs,
-      retornoPrev: fimAbs ? hora(fimAbs) : "sem previsão",
-      tempoRotaMin: inicioAbs !== null && fimAbs !== null ? fimAbs - inicioAbs : null,
-      manutencao: get(r, ["NECESSIDADE_MANUTEN", "NECESSIDADE MANUTEN", "MANUTENCAO"]),
-      obsEscala: get(r, ["OBSERVACAO_ESCALA", "OBSERVAÇÃO_ESCALA"]),
-    };
-  }).filter((r) => r.data && r.rota && r.placa);
-}
-function aplicarOcorrencias(escala, ocorrencias, durPadrao) {
-  const oc = parseCSV(ocorrencias).map((r) => ({ data: get(r, ["DATA"]), rotaBase: rotaBase(get(r, ["ROTA"])), placaNorm: placa(get(r, ["PLACA"])), saida: get(r, ["SAIDA_REAL", "SAÍDA_REAL", "SAIDA"]), fim: get(r, ["FIM_REAL", "FIM", "RETORNO", "ENCERRAMENTO"]), motivo: get(r, ["MOTIVO"]), obs: get(r, ["OBSERVACAO", "OBSERVAÇÃO"]), status: get(r, ["STATUS_ROTA", "STATUS"]) }));
-  return escala.map((r) => {
-    const o = oc.find((x) => (x.placaNorm && x.placaNorm === r.placaNorm) || (x.rotaBase && x.rotaBase === r.rotaBase));
-    if (!o) return { ...r, saidaReal: r.inicio, saidaAbs: r.inicioAbs, fimHojeAbs: r.fimAbs, motivo: "", observacao: "", statusRota: "", fimEstimado: true, desvioMin: null };
-    const saidaAbs = dataHoraMin(r.data, o.saida || r.inicio);
-    let fimAbs = dataHoraMin(r.data, o.fim);
-    if (fimAbs !== null && saidaAbs !== null && fimAbs <= saidaAbs) fimAbs += 1440;
-    if (fimAbs === null && saidaAbs !== null) fimAbs = saidaAbs + (r.tempoRotaMin || durPadrao * 60);
-    return { ...r, saidaReal: o.saida || r.inicio, saidaAbs: saidaAbs ?? r.inicioAbs, fimHojeAbs: fimAbs ?? r.fimAbs, motivo: o.motivo, observacao: o.obs, statusRota: o.status, fimEstimado: !o.fim, desvioMin: minHora(o.saida) !== null && minHora(r.inicio) !== null ? minHora(o.saida) - minHora(r.inicio) : null };
-  });
-}
-function turno(row, mot) {
-  const inicio = row.saidaAbs ?? row.inicioAbs;
-  const fim = row.fimHojeAbs ?? row.fimAbs;
-  if (inicio === null || fim === null) return null;
-  if (mot.total <= 1) return { inicioAbs: inicio, fimAbs: fim };
-  const parte = (fim - inicio) / mot.total;
-  return { inicioAbs: inicio + Math.round(parte * mot.indice), fimAbs: mot.indice === mot.total - 1 ? fim : inicio + Math.round(parte * (mot.indice + 1)) };
-}
-function extrairPlacas(txt) {
-  return [...new Set((norm(txt).match(/[A-Z]{3}\d[A-Z0-9]\d{2}/g) || []).map(placa))];
-}
-function risco(score) {
-  if (score >= 60) return "Alto";
-  if (score >= 35) return "Médio";
-  return "Baixo";
-}
-function parseParametros(txt) {
-  const p = {};
-  parseCSV(txt).forEach((r) => {
-    const k = key(get(r, ["PARAMETRO", "CHAVE"]));
-    const v = get(r, ["VALOR"]);
-    if (k) p[k] = v;
-  });
-  return p;
-}
-function gerarPredicao({ escalaTxt, ocorrTxt, deParaTxt, excecoesTxt, equipamentosTxt, parametrosTxt, historico }) {
-  const p = parseParametros(parametrosTxt);
-  const dataHoje = p.DATA_HOJE || "19/05/2026";
-  const dataAmanha = p.DATA_AMANHA || "20/05/2026";
-  const durPadrao = Number(p.DURACAO_PADRAO_HORAS || 12);
-  const interMin = Number(p.INTERJORNADA_MINIMA_HORAS || 11) * 60;
-  const margem = Number(p.MARGEM_ALERTA_HORAS || 1) * 60;
-  const mapa = mapaDePara(deParaTxt);
-  const ignorar = excecoesInterjornada(excecoesTxt, mapa);
-  const escala = lerEscala(escalaTxt, mapa, durPadrao);
-  const hojeEscala = escala.filter((r) => r.data === dataHoje);
-  const amanha = escala.filter((r) => r.data === dataAmanha);
-  const hoje = aplicarOcorrencias(hojeEscala, ocorrTxt, durPadrao);
-  const bloqueados = new Map();
-  parseCSV(equipamentosTxt).forEach((e) => {
-    const p = placa(get(e, ["PLACA"]));
-    if (p) bloqueados.set(p, get(e, ["STATUS", "SITUACAO"]) || "PARADO");
-  });
-
-  const porPlaca = new Map();
-  const porRota = new Map();
-  hoje.forEach((r) => {
-    const txt = norm(`${r.motivo} ${r.observacao} ${r.statusRota}`);
-    const placas = new Set([r.placaNorm, ...extrairPlacas(txt)]);
-    placas.forEach((p) => {
-      if (!p) return;
-      const arr = porPlaca.get(p) || [];
-      if (/PROBLEMA|CARDAN|ROLAMENTO|MANUTENCAO|DESCARGA|AGUARDANDO|PARADO|QUEBROU|OFICINA|LOGISTICA/.test(txt)) arr.push({ peso: 45, msg: `Ocorrência operacional ligada ao equipamento ${p}: ${r.motivo || r.observacao || r.statusRota}` });
-      if (r.desvioMin !== null && r.desvioMin > 15) arr.push({ peso: 15, msg: `Saiu ${r.desvioMin} min após o previsto em ${r.rota}` });
-      if (r.desvioMin !== null && r.desvioMin < -30) arr.push({ peso: 8, msg: `Saiu ${Math.abs(r.desvioMin)} min antes do previsto em ${r.rota}` });
-      porPlaca.set(p, arr);
-    });
-    const rr = porRota.get(r.rotaBase) || [];
-    if (/DIVERGENCIA|HORARIO DE SAIDA|ROTEIRIZACAO/.test(txt)) rr.push({ peso: 30, msg: "Divergência de roteirização/horário identificada na rota-base" });
-    if (/MAO DE OBRA|MOTORISTA|ADIANTAMENTO/.test(txt)) rr.push({ peso: 18, msg: "Ocorrência de mão de obra/aderência de motorista na rota-base" });
-    porRota.set(r.rotaBase, rr);
-  });
-
-  return amanha.map((r) => {
-    let score = 5;
-    const motivos = [];
-    const acoes = [];
-    const interjornadas = [];
-
-    [r.placaNorm, r.reboqueNorm].filter(Boolean).forEach((p) => {
-      if (bloqueados.has(p)) {
-        score += 50;
-        motivos.push(`${p} está listado como ${bloqueados.get(p)}`);
-        acoes.push(`Confirmar liberação/substituição do equipamento ${p} antes da escala`);
-      }
-      (porPlaca.get(p) || []).forEach((pb) => { score += pb.peso; motivos.push(pb.msg); });
-    });
-
-    (porRota.get(r.rotaBase) || []).forEach((pb) => { score += pb.peso; motivos.push(pb.msg); });
-
-    const histRota = historico.filter((h) => rotaBase(h.rota) === r.rotaBase).slice(-5);
-    const histPlaca = historico.filter((h) => placa(h.placa) === r.placaNorm).slice(-5);
-    const reincidente = [...histRota, ...histPlaca].some((h) => ["Alto", "Médio"].includes(h.nivel));
-    if (reincidente) {
-      score += 12;
-      motivos.push("Histórico recente possui risco médio/alto para a mesma rota ou equipamento.");
-      acoes.push("Comparar com histórico antes de liberar a saída e validar se a causa anterior foi tratada.");
-    }
-
-    r.motoristas.forEach((ma) => {
-      if (ignorar.has(ma.norm)) {
-        interjornadas.push({ motorista: ma.nome, status: "Desconsiderado", descanso: null, deficit: 0, hoje: ignorar.get(ma.norm), amanha: `${r.rota} • ${ma.papel}` });
-        motivos.push(`Interjornada desconsiderada para ${ma.nome}: ${ignorar.get(ma.norm)}.`);
-        return;
-      }
-      const ta = turno(r, ma);
-      if (!ta) return;
-      const candidatos = hoje.flatMap((j) => j.motoristas.filter((mh) => compat(mh.norm, ma.norm)).map((mh) => ({ j, mh, th: turno(j, mh) })));
-      const ultima = candidatos.filter((c) => c.th && c.th.fimAbs <= ta.inicioAbs).sort((a, b) => b.th.fimAbs - a.th.fimAbs)[0];
-      if (!ultima) return;
-      const descanso = ta.inicioAbs - ultima.th.fimAbs;
-      const deficit = interMin - descanso;
-      const status = deficit > 0 ? "Irregular" : descanso <= interMin + margem ? "Atenção" : "OK";
-      interjornadas.push({ motorista: ma.nome, status, descanso, deficit: Math.max(deficit, 0), hoje: `${ultima.j.rota} • ${ultima.mh.papel} • fim ${hora(ultima.th.fimAbs)}`, amanha: `${r.rota} • ${ma.papel} • início ${hora(ta.inicioAbs)}` });
-      if (deficit > 0) {
-        score += 55;
-        motivos.push(`Interjornada crítica: ${ma.nome} terá apenas ${dur(descanso)} de descanso. Déficit de ${dur(deficit)}.`);
-        acoes.push(`Trocar motorista ou ajustar horário para cumprir ${interMin / 60}h de interjornada`);
-      } else if (descanso <= interMin + margem) {
-        score += 25;
-        motivos.push(`Interjornada em atenção: ${ma.nome} terá ${dur(descanso)} de descanso.`);
-        acoes.push(`Confirmar horário real de fim/início do turno de ${ma.nome}`);
-      }
-    });
-
-    if (r.inicioAbs !== null && minHora(r.inicio) <= 4 * 60) {
-      score += 8;
-      motivos.push("Saída muito cedo; pouca janela para corrigir falha antes da rota.");
-    }
-    if (r.tempoRotaMin >= 18 * 60) {
-      score += 10;
-      motivos.push(`Rota longa pela escala: tempo previsto de ${dur(r.tempoRotaMin)}.`);
-    }
-    if (!motivos.length) motivos.push("Sem impacto direto identificado com os dados importados.");
-    if (score >= 60) {
-      acoes.push("Acionar operação/logística ainda hoje e deixar plano reserva definido.");
-    } else if (score >= 35) {
-      acoes.push("Validar disponibilidade do equipamento e alinhamento do motorista antes do horário de saída.");
-    } else {
-      acoes.push("Manter monitoramento normal no controle de saída.");
-    }
-    const nivel = risco(Math.min(score, 100));
-    return { ...r, score: Math.min(score, 100), nivel, motivos: [...new Set(motivos)], acoes: [...new Set(acoes)], interjornadas };
-  }).sort((a, b) => b.score - a.score);
-}
-
-function sheetToCsv(sheet) {
-  const arr = XLSX.utils.sheet_to_json(sheet, { header: 1, raw: false, defval: "" });
-  return arr.filter((r) => r.some((c) => String(c).trim() !== "")).map((r) => r.map((c) => String(c ?? "").replace(/\r?\n/g, " ")).join(";")).join("\n");
-}
-function acharAba(wb, nomes) {
-  const targets = nomes.map(key);
-  const name = wb.SheetNames.find((n) => targets.includes(key(n)));
-  return name ? wb.Sheets[name] : null;
-}
-function baixarTexto(nome, conteudo, tipo = "text/csv;charset=utf-8") {
-  const blob = new Blob([conteudo], { type: tipo });
-  const url = URL.createObjectURL(blob);
-  const a = document.createElement("a");
-  a.href = url;
-  a.download = nome;
-  a.click();
-  URL.revokeObjectURL(url);
-}
-
-export default function App() {
-  const [escalaTxt, setEscalaTxt] = useState(exemploEscala);
-  const [ocorrTxt, setOcorrTxt] = useState(exemploOcorrencias);
-  const [deParaTxt, setDeParaTxt] = useState(exemploDePara);
-  const [excecoesTxt, setExcecoesTxt] = useState(exemploExcecoes);
-  const [equipTxt, setEquipTxt] = useState(exemploEquipamentos);
-  const [paramTxt, setParamTxt] = useState(exemploParametros);
-  const [historico, setHistorico] = useState([]);
-  const [tab, setTab] = useState("predicao");
-  const [msg, setMsg] = useState("");
-
-  useEffect(() => {
-    try {
-      const salvo = JSON.parse(localStorage.getItem("historico_predicao_rotas_cco") || "[]");
-      if (Array.isArray(salvo)) setHistorico(salvo);
-    } catch {
-      // ignora histórico inválido
-    }
-  }, []);
-
-  useEffect(() => {
-    localStorage.setItem("historico_predicao_rotas_cco", JSON.stringify(historico));
-  }, [historico]);
-
-  const predicao = useMemo(() => gerarPredicao({ escalaTxt, ocorrTxt, deParaTxt, excecoesTxt, equipamentosTxt: equipTxt, parametrosTxt: paramTxt, historico }), [escalaTxt, ocorrTxt, deParaTxt, excecoesTxt, equipTxt, paramTxt, historico]);
-  const resumo = {
-    alto: predicao.filter((p) => p.nivel === "Alto").length,
-    medio: predicao.filter((p) => p.nivel === "Médio").length,
-    baixo: predicao.filter((p) => p.nivel === "Baixo").length,
-    inter: predicao.filter((p) => p.interjornadas?.some((i) => i.status !== "OK" && i.status !== "Desconsiderado")).length,
-  };
-  const params = parseParametros(paramTxt);
-
-  function importarExcel(e) {
-    const file = e.target.files?.[0];
-    if (!file) return;
-    const reader = new FileReader();
-    reader.onload = (evt) => {
-      try {
-        const wb = XLSX.read(evt.target.result, { type: "array", cellDates: false });
-        const escala = acharAba(wb, ["ESCALA_DIA_SEGUINTE", "ESCALA_OFICIAL", "ESCALA"]);
-        const ocorr = acharAba(wb, ["OCORRENCIAS_DIA_ATUAL", "OCORRÊNCIAS_DIA_ATUAL", "OCORRENCIAS", "OCORRÊNCIAS"]);
-        const depara = acharAba(wb, ["DE_PARA_MOTORISTAS", "DE_PARA", "MOTORISTAS"]);
-        const exc = acharAba(wb, ["EXCECOES_INTERJORNADA", "EXCEÇÕES_INTERJORNADA", "SEM_INTERJORNADA"]);
-        const equip = acharAba(wb, ["EQUIPAMENTOS", "FROTA"]);
-        const param = acharAba(wb, ["PARAMETROS", "PARÂMETROS"]);
-        const hist = acharAba(wb, ["HISTORICO_ROTAS", "HISTÓRICO_ROTAS", "HISTORICO"]);
-        if (escala) setEscalaTxt(sheetToCsv(escala));
-        if (ocorr) setOcorrTxt(sheetToCsv(ocorr));
-        if (depara) setDeParaTxt(sheetToCsv(depara));
-        if (exc) setExcecoesTxt(sheetToCsv(exc));
-        if (equip) setEquipTxt(sheetToCsv(equip));
-        if (param) setParamTxt(sheetToCsv(param));
-        if (hist) {
-          const linhas = parseCSV(sheetToCsv(hist)).map((r) => ({
-            data: get(r, ["DATA"]), rota: get(r, ["ROTA"]), placa: get(r, ["PLACA"]), motorista: get(r, ["MOTORISTA"]), nivel: get(r, ["NIVEL_RISCO"]), score: Number(get(r, ["SCORE"]) || 0), motivos: get(r, ["OBSERVACAO", "MOTIVO"]), acoes: get(r, ["ACOES_TOMADAS"]), salvoEm: new Date().toISOString()
-          })).filter((r) => r.rota);
-          setHistorico((h) => [...h, ...linhas]);
-        }
-        setMsg(`Arquivo importado: ${file.name}`);
-        setTab("predicao");
-      } catch (err) {
-        setMsg(`Erro ao importar: ${err.message}`);
-      }
-    };
-    reader.readAsArrayBuffer(file);
-  }
-
-  function salvarHistorico() {
-    const novos = predicao.map((p) => ({
-      data: p.data,
-      rota: p.rota,
-      placa: p.placa,
-      reboque: p.reboque,
-      motorista: p.motorista,
-      inicio: p.inicio,
-      retornoPrev: p.retornoPrev,
-      tempo: dur(p.tempoRotaMin),
-      nivel: p.nivel,
-      score: p.score,
-      motivos: p.motivos.join(" | "),
-      acoes: p.acoes.join(" | "),
-      salvoEm: new Date().toISOString(),
-    }));
-    setHistorico((h) => [...h, ...novos]);
-    setMsg(`${novos.length} rotas salvas no histórico local.`);
-  }
-
-  function exportarHistorico() {
-    const header = ["DATA", "ROTA", "PLACA", "REBOQUE", "MOTORISTA", "INICIO", "RETORNO_PREV", "TEMPO", "NIVEL_RISCO", "SCORE", "MOTIVOS", "ACOES", "SALVO_EM"];
-    const linhas = historico.map((h) => [h.data, h.rota, h.placa, h.reboque || "", h.motorista, h.inicio || "", h.retornoPrev || "", h.tempo || "", h.nivel, h.score, h.motivos, h.acoes, h.salvoEm].join(";"));
-    baixarTexto("historico_predicao_rotas.csv", [header.join(";"), ...linhas].join("\n"));
-  }
-
-  function baixarModelo() {
-    const wb = XLSX.utils.book_new();
-    const add = (name, csv) => XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(csv.split(/\r?\n/).map((l) => l.split(";"))), name);
-    add("ESCALA_DIA_SEGUINTE", exemploEscala);
-    add("OCORRENCIAS_DIA_ATUAL", exemploOcorrencias);
-    add("DE_PARA_MOTORISTAS", exemploDePara);
-    add("EXCECOES_INTERJORNADA", exemploExcecoes);
-    add("EQUIPAMENTOS", exemploEquipamentos);
-    add("PARAMETROS", exemploParametros);
-    add("HISTORICO_ROTAS", "DATA;ROTA;PLACA;REBOQUE;MOTORISTA;SAIDA_PROGRAMADA;SAIDA_REAL;FIM_PREVISTO;FIM_REAL;TEMPO_PREVISTO;ATRASO_MIN;MOTIVO;OBSERVACAO;NIVEL_RISCO;SCORE;ACOES_TOMADAS");
-    XLSX.writeFile(wb, "PADRAO_IMPORTACAO_PREDICAO_ROTAS_CCO.xlsx");
-  }
-
-  const cor = { Alto: "bg-red-100 text-red-800 border-red-200", Médio: "bg-amber-100 text-amber-800 border-amber-200", Baixo: "bg-emerald-100 text-emerald-800 border-emerald-200" };
-  const bolinha = { Alto: "bg-red-500", Médio: "bg-amber-500", Baixo: "bg-emerald-500", OK: "bg-emerald-500", Atenção: "bg-amber-500", Irregular: "bg-red-500", Desconsiderado: "bg-slate-400" };
-
-  return (
-    <div className="min-h-screen bg-slate-950 text-slate-100 p-5">
-      <div className="mx-auto max-w-7xl space-y-5">
-        <header className="rounded-2xl border border-slate-800 bg-slate-900 p-5 shadow-xl">
-          <div className="flex flex-col gap-4 lg:flex-row lg:items-end lg:justify-between">
-            <div>
-              <p className="text-xs font-bold uppercase tracking-[0.25em] text-cyan-300">CCO • Predição de rotas</p>
-              <h1 className="mt-2 text-3xl font-bold">Predição do dia seguinte</h1>
-              <p className="mt-2 text-sm text-slate-400">Importe um Excel padronizado, calcule o risco de amanhã e salve o histórico para comparar recorrência de rota, placa e interjornada.</p>
-              <p className="mt-1 text-xs text-slate-500">Base: hoje {params.DATA_HOJE || "-"} → amanhã {params.DATA_AMANHA || "-"}</p>
-            </div>
-            <div className="grid grid-cols-4 gap-2 text-center">
-              <div className="rounded-xl border border-red-900 bg-red-950/40 p-3"><div className="text-2xl font-bold text-red-300">{resumo.alto}</div><div className="text-xs text-red-200">Alto</div></div>
-              <div className="rounded-xl border border-amber-900 bg-amber-950/40 p-3"><div className="text-2xl font-bold text-amber-300">{resumo.medio}</div><div className="text-xs text-amber-200">Médio</div></div>
-              <div className="rounded-xl border border-emerald-900 bg-emerald-950/40 p-3"><div className="text-2xl font-bold text-emerald-300">{resumo.baixo}</div><div className="text-xs text-emerald-200">Baixo</div></div>
-              <div className="rounded-xl border border-cyan-900 bg-cyan-950/40 p-3"><div className="text-2xl font-bold text-cyan-300">{resumo.inter}</div><div className="text-xs text-cyan-200">Interj.</div></div>
-            </div>
-          </div>
-          <div className="mt-4 flex flex-wrap gap-2">
-            <label className="cursor-pointer rounded-xl bg-cyan-400 px-4 py-2 text-sm font-bold text-slate-950 hover:bg-cyan-300">
-              Importar Excel
-              <input type="file" accept=".xlsx,.xls" className="hidden" onChange={importarExcel} />
-            </label>
-            <button onClick={baixarModelo} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Baixar modelo</button>
-            <button onClick={salvarHistorico} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Salvar predição no histórico</button>
-            <button onClick={exportarHistorico} className="rounded-xl border border-slate-700 px-4 py-2 text-sm text-slate-200 hover:bg-slate-800">Exportar histórico</button>
-            <button onClick={() => { setHistorico([]); setMsg("Histórico local limpo."); }} className="rounded-xl border border-red-900 px-4 py-2 text-sm text-red-200 hover:bg-red-950/50">Limpar histórico</button>
-          </div>
-          {msg && <div className="mt-3 rounded-xl border border-cyan-900 bg-cyan-950/30 px-4 py-2 text-sm text-cyan-100">{msg}</div>}
-        </header>
-
-        <nav className="flex gap-2 border-b border-slate-800 pb-2">
-          {[["predicao", "Predição"], ["dados", "Dados importados"], ["historico", "Histórico"]].map(([id, label]) => <button key={id} onClick={() => setTab(id)} className={`rounded-t-xl px-4 py-2 text-sm font-semibold ${tab === id ? "bg-slate-800 text-cyan-300" : "text-slate-400 hover:bg-slate-900"}`}>{label}</button>)}
-        </nav>
-
-        {tab === "predicao" && (
-          <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-            {predicao.length === 0 ? <div className="p-8 text-center text-slate-400">Nenhuma rota encontrada para DATA_AMANHA. Importe uma escala com a data do próximo dia na aba ESCALA_DIA_SEGUINTE.</div> : <div className="overflow-x-auto">
-              <table className="w-full min-w-[1200px] text-left text-sm">
-                <thead className="bg-slate-800 text-xs uppercase text-slate-300"><tr><th className="p-3">Risco</th><th className="p-3">Rota</th><th className="p-3">Início</th><th className="p-3">Motorista</th><th className="p-3">Placa</th><th className="p-3">Tempo</th><th className="p-3">Interjornada</th><th className="p-3">Motivos</th><th className="p-3">Ações</th></tr></thead>
-                <tbody className="divide-y divide-slate-800">
-                  {predicao.map((p, i) => <tr key={`${p.rota}-${i}`} className="align-top hover:bg-slate-800/40">
-                    <td className="p-3"><span className={`inline-flex rounded-full border px-3 py-1 text-xs font-bold ${cor[p.nivel]}`}>{p.nivel} • {p.score}</span></td>
-                    <td className="p-3 font-semibold text-white">{p.rota}</td>
-                    <td className="p-3 text-cyan-200">{p.inicio}</td>
-                    <td className="p-3 text-slate-300">{p.motoristas.map((m) => `${m.nome}${m.total > 1 ? ` (${m.papel})` : ""}`).join(" → ")}</td>
-                    <td className="p-3 font-mono text-slate-300">{p.placa}{p.reboque && !p.reboque.includes("***") ? ` / ${p.reboque}` : ""}</td>
-                    <td className="p-3 text-slate-300">{dur(p.tempoRotaMin)}<br /><span className="text-xs text-slate-500">Ret. {p.retornoPrev}</span></td>
-                    <td className="p-3"><div className="space-y-2">{p.interjornadas?.length ? p.interjornadas.map((j, k) => <div key={k} className="rounded-xl border border-slate-800 bg-slate-950 p-2"><div className="flex items-center gap-2"><span className={`h-2 w-2 rounded-full ${bolinha[j.status] || "bg-slate-400"}`} /><b className="text-xs">{j.status}</b></div><div className="mt-1 text-xs text-slate-400">{j.motorista}</div><div className="text-xs text-slate-500">Hoje: {j.hoje}</div><div className="text-xs text-slate-500">Amanhã: {j.amanha}</div><div className="text-xs text-slate-400">Descanso: {dur(j.descanso)}</div>{j.deficit > 0 && <div className="text-xs text-red-300">Déficit: {dur(j.deficit)}</div>}</div>) : <span className="text-xs text-slate-500">Sem vínculo</span>}</div></td>
-                    <td className="p-3 text-slate-300"><ul className="list-disc space-y-1 pl-4">{p.motivos.map((m) => <li key={m}>{m}</li>)}</ul></td>
-                    <td className="p-3 text-slate-300"><ul className="list-disc space-y-1 pl-4">{p.acoes.map((a) => <li key={a}>{a}</li>)}</ul></td>
-                  </tr>)}
-                </tbody>
-              </table>
-            </div>}
-          </section>
-        )}
-
-        {tab === "dados" && <section className="grid gap-4 lg:grid-cols-2">
-          {[["ESCALA_DIA_SEGUINTE", escalaTxt, setEscalaTxt], ["OCORRENCIAS_DIA_ATUAL", ocorrTxt, setOcorrTxt], ["DE_PARA_MOTORISTAS", deParaTxt, setDeParaTxt], ["EXCECOES_INTERJORNADA", excecoesTxt, setExcecoesTxt], ["EQUIPAMENTOS", equipTxt, setEquipTxt], ["PARAMETROS", paramTxt, setParamTxt]].map(([titulo, val, set]) => <div key={titulo} className="rounded-2xl border border-slate-800 bg-slate-900 p-4"><h3 className="mb-2 font-bold">{titulo}</h3><textarea value={val} onChange={(e) => set(e.target.value)} className="h-52 w-full rounded-xl border border-slate-700 bg-slate-950 p-3 font-mono text-xs text-slate-100 outline-none focus:border-cyan-400" /></div>)}
-        </section>}
-
-        {tab === "historico" && <section className="rounded-2xl border border-slate-800 bg-slate-900 p-4">
-          <h2 className="mb-3 text-xl font-bold">Histórico local</h2>
-          <p className="mb-4 text-sm text-slate-400">Esse histórico fica salvo no navegador via localStorage. Para backup, use Exportar histórico.</p>
-          <div className="overflow-x-auto"><table className="w-full min-w-[1000px] text-left text-sm"><thead className="bg-slate-800 text-xs uppercase text-slate-300"><tr><th className="p-3">Data</th><th className="p-3">Rota</th><th className="p-3">Placa</th><th className="p-3">Motorista</th><th className="p-3">Risco</th><th className="p-3">Score</th><th className="p-3">Motivos</th></tr></thead><tbody className="divide-y divide-slate-800">{historico.slice().reverse().map((h, i) => <tr key={i}><td className="p-3">{h.data}</td><td className="p-3">{h.rota}</td><td className="p-3 font-mono">{h.placa}</td><td className="p-3">{h.motorista}</td><td className="p-3">{h.nivel}</td><td className="p-3">{h.score}</td><td className="p-3 text-slate-400">{h.motivos}</td></tr>)}</tbody></table></div>
-        </section>}
-      </div>
-    </div>
-  );
-}
+let state={escala:exemploEscala,ocorr:exemploOcorrencias,depara:exemploDePara,excecoes:exemploExcecoes,equip:exemploEquip,param:exemploParam,historico:JSON.parse(localStorage.getItem('historico_predicao_rotas_cco')||'[]'),tab:'pred'};
+const norm=v=>String(v??'').normalize('NFD').replace(/[\u0300-\u036f]/g,'').toUpperCase().trim();
+const key=v=>norm(v).replace(/[^A-Z0-9]+/g,'_').replace(/^_+|_+$/g,'');
+const placa=v=>norm(v).replace(/[^A-Z0-9]/g,'');
+const nomeNorm=v=>norm(String(v??'').replace(/^\s*\(AG\)\s*/i,'')).replace(/[^A-Z0-9 ]/g,' ').replace(/\s+/g,' ').trim();
+function parseCSV(txt){const linhas=String(txt||'').split(/\r?\n/).map(l=>l.trim()).filter(Boolean);if(!linhas.length)return[];const hi=linhas.findIndex(l=>{const n=norm(l);return n.includes('DATA')||n.includes('PARAMETRO')||n.includes('APELIDO')||n.includes('MOTORISTA')||n.includes('PLACA')});const start=hi>=0?hi:0;const headers=linhas[start].split(';').map(key);return linhas.slice(start+1).map(l=>{const c=l.split(';');const o={};headers.forEach((h,i)=>o[h]=(c[i]??'').trim());return o})}
+function get(r,arr){for(const n of arr){const v=r[key(n)];if(v!==undefined&&v!==null&&String(v).trim()!=='')return String(v).trim()}return''}
+function minHora(h){if(!h||String(h).includes('--')||String(h).trim()==='-')return null;const p=String(h).trim().replace(/h/gi,':').split(':').map(Number);if(p.length<2||Number.isNaN(p[0])||Number.isNaN(p[1]))return null;return p[0]*60+p[1]}
+function tempoMin(v){const m=minHora(v);if(m!==null)return m;const n=Number(String(v||'').replace(',','.'));return Number.isNaN(n)?null:n*60}
+function dataBR(d){const p=String(d||'').split('/').map(Number);if(p.length!==3||p.some(Number.isNaN))return null;return new Date(p[2],p[1]-1,p[0])}
+function dataHora(d,h){const base=dataBR(d),m=minHora(h);if(!base||m===null)return null;return Math.floor(base.getTime()/60000)+m}
+function dur(m){if(m===null||m===undefined||Number.isNaN(m))return'sem dados';const s=m<0?'-':'';const a=Math.abs(Math.round(m));return`${s}${String(Math.floor(a/60)).padStart(2,'0')}h${String(a%60).padStart(2,'0')}`}
+function hora(abs){if(abs===null||abs===undefined||Number.isNaN(abs))return'estimado';const m=((Math.round(abs)%1440)+1440)%1440;return`${String(Math.floor(m/60)).padStart(2,'0')}:${String(m%60).padStart(2,'0')}`}
+function rotaBase(r){return norm(r).replace(/\b0?1[DR]?\b|\b0?2[DR]?\b/g,'').replace(/\s+/g,' ').trim()}
+function mapaDePara(txt){const m=new Map();parseCSV(txt).forEach(r=>{const de=get(r,['APELIDO','DE','MOTORISTA']);const para=get(r,['NOME_CORRETO','PARA','NOME COMPLETO']);if(de&&para)m.set(nomeNorm(de),para)});return m}
+function nomeCorreto(n,mapa){const limpo=String(n||'').replace(/^\s*\(AG\)\s*/i,'').trim();if(!limpo||/\*{2,}/.test(limpo))return'';return mapa.get(nomeNorm(limpo))||limpo}
+function nomesEscala(motorista,troca,mapa){const base=String(motorista||'').split(/\||,|\/| E /i).map(n=>nomeCorreto(n,mapa)).filter(Boolean);const ok=troca&&!/\*{2,}/.test(troca)&&norm(troca)!=='TROCA DE TURNO';const extra=ok?String(troca).split(/\||,|\/| E /i).map(n=>nomeCorreto(n,mapa)).filter(Boolean):[];const f=[...base];extra.forEach(n=>{if(!f.some(x=>nomeNorm(x)===nomeNorm(n)))f.push(n)});return f}
+function motoristas(nomes){return nomes.map((nome,i)=>({nome,norm:nomeNorm(nome),indice:i,total:nomes.length,papel:nomes.length===1?'Jornada completa':i===0?'1º turno':i===1?'2º turno':`${i+1}º turno`}))}
+function compat(a,b){const na=nomeNorm(a),nb=nomeNorm(b);if(!na||!nb)return false;if(na===nb)return true;const ta=na.split(' ').filter(t=>t.length>=4),tb=nb.split(' ').filter(t=>t.length>=4);const ig=ta.filter(t=>tb.includes(t));return ig.length>=2||(ta.length===1&&ig.length===1)||(tb.length===1&&ig.length===1)}
+function excecoes(txt,mapa){const out=new Map();parseCSV(txt).forEach(r=>{const n=get(r,['MOTORISTA','NOME','APELIDO']);const mot=get(r,['MOTIVO','OBSERVACAO'])||'Desconsiderado';if(!n)return;out.set(nomeNorm(n),mot);out.set(nomeNorm(nomeCorreto(n,mapa)),mot)});return out}
+function lerEscala(txt,mapa,durP){return parseCSV(txt).map(r=>{const data=get(r,['DATA']),rota=get(r,['ROTA']),inicio=get(r,['SAIDA_PROGRAMADA','SAÍDA PROGRAMADA','SAIDA_ROTEIRIZADA','INICIO']);const tempo=tempoMin(get(r,['TEMPO','DURACAO','DURAÇÃO']));const ret=get(r,['RETORNO_PREV','RETORNO_PREV.','RETORNO PREVISTO']);const ini=dataHora(data,inicio),retAbs=dataHora(data,ret);let fim=null;if(ini!==null&&tempo!==null)fim=ini+tempo;else if(ini!==null&&retAbs!==null)fim=retAbs<=ini?retAbs+1440:retAbs;else if(ini!==null)fim=ini+durP*60;const nomes=nomesEscala(get(r,['MOTORISTA']),get(r,['TROCA_DE_TURNO','TROCA DE TURNO']),mapa);return{data,rota,rotaBase:rotaBase(rota),placa:get(r,['PLACA','CAMINHAO','CAMINHÃO']),placaNorm:placa(get(r,['PLACA','CAMINHAO','CAMINHÃO'])),reboque:get(r,['REBOQUE']),reboqueNorm:placa(get(r,['REBOQUE'])),motorista:nomes.join(' | '),motoristas:motoristas(nomes),inicio,inicioAbs:ini,fimAbs:fim,retornoPrev:fim?hora(fim):'sem previsão',tempoRotaMin:ini!==null&&fim!==null?fim-ini:null,trocaOriginal:get(r,['TROCA_DE_TURNO','TROCA DE TURNO'])}}).filter(r=>r.data&&r.rota&&r.placa)}
+function aplicarOc(escala,ocTxt,durP){const oc=parseCSV(ocTxt).map(r=>({rotaBase:rotaBase(get(r,['ROTA'])),placaNorm:placa(get(r,['PLACA'])),saida:get(r,['SAIDA_REAL','SAÍDA_REAL','SAIDA']),fim:get(r,['FIM_REAL','FIM','RETORNO','ENCERRAMENTO']),motivo:get(r,['MOTIVO']),obs:get(r,['OBSERVACAO','OBSERVAÇÃO']),status:get(r,['STATUS_ROTA','STATUS'])}));return escala.map(r=>{const o=oc.find(x=>(x.placaNorm&&x.placaNorm===r.placaNorm)||(x.rotaBase&&x.rotaBase===r.rotaBase));if(!o)return{...r,saidaReal:r.inicio,saidaAbs:r.inicioAbs,fimHojeAbs:r.fimAbs,motivo:'',observacao:'',statusRota:'',desvioMin:null};const s=dataHora(r.data,o.saida||r.inicio);let f=dataHora(r.data,o.fim);if(f!==null&&s!==null&&f<=s)f+=1440;if(f===null&&s!==null)f=s+(r.tempoRotaMin||durP*60);return{...r,saidaReal:o.saida||r.inicio,saidaAbs:s??r.inicioAbs,fimHojeAbs:f??r.fimAbs,motivo:o.motivo,observacao:o.obs,statusRota:o.status,desvioMin:minHora(o.saida)!==null&&minHora(r.inicio)!==null?minHora(o.saida)-minHora(r.inicio):null}})}
+function turno(row,m){const ini=row.saidaAbs??row.inicioAbs,fim=row.fimHojeAbs??row.fimAbs;if(ini===null||fim===null)return null;if(m.total<=1)return{inicioAbs:ini,fimAbs:fim};const parte=(fim-ini)/m.total;return{inicioAbs:ini+Math.round(parte*m.indice),fimAbs:m.indice===m.total-1?fim:ini+Math.round(parte*(m.indice+1))}}
+function placasTxt(txt){return[...new Set((norm(txt).match(/[A-Z]{3}\d[A-Z0-9]\d{2}/g)||[]).map(placa))]}
+function params(){const p={};parseCSV(state.param).forEach(r=>{const k=key(get(r,['PARAMETRO','CHAVE']));const v=get(r,['VALOR']);if(k)p[k]=v});return p}
+function gerar(){const p=params(),dataHoje=p.DATA_HOJE||'19/05/2026',dataAmanha=p.DATA_AMANHA||'20/05/2026',durP=Number(p.DURACAO_PADRAO_HORAS||12),interMin=Number(p.INTERJORNADA_MINIMA_HORAS||11)*60,margem=Number(p.MARGEM_ALERTA_HORAS||1)*60;document.getElementById('periodo').textContent=`Base: ${dataHoje} → ${dataAmanha}`;const mapa=mapaDePara(state.depara),ign=excecoes(state.excecoes,mapa),esc=lerEscala(state.escala,mapa,durP),hoje=aplicarOc(esc.filter(r=>r.data===dataHoje),state.ocorr,durP),amanha=esc.filter(r=>r.data===dataAmanha);const bloq=new Map();parseCSV(state.equip).forEach(e=>{const p=placa(get(e,['PLACA']));if(p)bloq.set(p,get(e,['STATUS','SITUACAO'])||'PARADO')});const porPlaca=new Map(),porRota=new Map();hoje.forEach(r=>{const txt=norm(`${r.motivo} ${r.observacao} ${r.statusRota}`);const placas=new Set([r.placaNorm,...placasTxt(txt)]);placas.forEach(p=>{if(!p)return;const arr=porPlaca.get(p)||[];if(/PROBLEMA|CARDAN|ROLAMENTO|MANUTENCAO|DESCARGA|AGUARDANDO|PARADO|QUEBROU|OFICINA|LOGISTICA/.test(txt))arr.push({peso:45,msg:`Ocorrência operacional ligada ao equipamento ${p}: ${r.motivo||r.observacao||r.statusRota}`});if(r.desvioMin!==null&&r.desvioMin>15)arr.push({peso:15,msg:`Saiu ${r.desvioMin} min após o previsto em ${r.rota}`});if(r.desvioMin!==null&&r.desvioMin<-30)arr.push({peso:8,msg:`Saiu ${Math.abs(r.desvioMin)} min antes do previsto em ${r.rota}`});porPlaca.set(p,arr)});const rr=porRota.get(r.rotaBase)||[];if(/DIVERGENCIA|HORARIO DE SAIDA|ROTEIRIZACAO/.test(txt))rr.push({peso:30,msg:'Divergência de roteirização/horário identificada na rota-base'});if(/MAO DE OBRA|MOTORISTA|ADIANTAMENTO/.test(txt))rr.push({peso:18,msg:'Ocorrência de mão de obra/aderência de motorista na rota-base'});porRota.set(r.rotaBase,rr)});return amanha.map(r=>{let score=5;const motivos=[],acoes=[],ijs=[];[r.placaNorm,r.reboqueNorm].filter(Boolean).forEach(p=>{if(bloq.has(p)){score+=50;motivos.push(`${p} está listado como ${bloq.get(p)}`);acoes.push(`Confirmar liberação/substituição do equipamento ${p} antes da escala`)}(porPlaca.get(p)||[]).forEach(pb=>{score+=pb.peso;motivos.push(pb.msg)})});(porRota.get(r.rotaBase)||[]).forEach(pb=>{score+=pb.peso;motivos.push(pb.msg)});const histR=[...state.historico].filter(h=>rotaBase(h.rota)===r.rotaBase||placa(h.placa)===r.placaNorm).slice(-5);if(histR.some(h=>['Alto','Médio'].includes(h.nivel))){score+=12;motivos.push('Histórico recente possui risco médio/alto para a mesma rota ou equipamento.');acoes.push('Comparar com histórico e validar se a causa anterior foi tratada.')};r.motoristas.forEach(ma=>{if(ign.has(ma.norm)){ijs.push({motorista:ma.nome,status:'Desconsiderado',descanso:null,deficit:0,hoje:ign.get(ma.norm),amanha:`${r.rota} • ${ma.papel}`});motivos.push(`Interjornada desconsiderada para ${ma.nome}: ${ign.get(ma.norm)}.`);return}const ta=turno(r,ma);if(!ta)return;const cands=hoje.flatMap(j=>j.motoristas.filter(mh=>compat(mh.norm,ma.norm)).map(mh=>({j,mh,th:turno(j,mh)})));const ult=cands.filter(c=>c.th&&c.th.fimAbs<=ta.inicioAbs).sort((a,b)=>b.th.fimAbs-a.th.fimAbs)[0];if(!ult)return;const descanso=ta.inicioAbs-ult.th.fimAbs,def=interMin-descanso,status=def>0?'Irregular':descanso<=interMin+margem?'Atenção':'OK';ijs.push({motorista:ma.nome,status,descanso,deficit:Math.max(def,0),hoje:`${ult.j.rota} • ${ult.mh.papel} • fim ${hora(ult.th.fimAbs)}`,amanha:`${r.rota} • ${ma.papel} • início ${hora(ta.inicioAbs)}`});if(def>0){score+=55;motivos.push(`Interjornada crítica: ${ma.nome} terá apenas ${dur(descanso)} de descanso. Déficit de ${dur(def)}.`);acoes.push(`Trocar motorista ou ajustar horário para cumprir ${interMin/60}h de interjornada`)}else if(descanso<=interMin+margem){score+=25;motivos.push(`Interjornada em atenção: ${ma.nome} terá ${dur(descanso)} de descanso.`);acoes.push(`Confirmar horário real de fim/início do turno de ${ma.nome}`)}});if(r.inicioAbs!==null&&minHora(r.inicio)<=240){score+=8;motivos.push('Saída muito cedo; pouca janela para corrigir falha antes da rota.')};if(r.tempoRotaMin>=1080){score+=10;motivos.push(`Rota longa pela escala: tempo previsto de ${dur(r.tempoRotaMin)}.`)};if(!motivos.length)motivos.push('Sem impacto direto identificado com os dados importados.');if(score>=60)acoes.push('Acionar operação/logística ainda hoje e deixar plano reserva definido.');else if(score>=35)acoes.push('Validar disponibilidade do equipamento e alinhamento do motorista antes do horário de saída.');else acoes.push('Manter monitoramento normal no controle de saída.');const s=Math.min(score,100);const nivel=s>=60?'Alto':s>=35?'Médio':'Baixo';return{...r,score:s,nivel,motivos:[...new Set(motivos)],acoes:[...new Set(acoes)],interjornadas:ijs}}).sort((a,b)=>b.score-a.score)}
+function setMsg(t){const el=document.getElementById('msg');el.style.display='block';el.textContent=t}
+function sheetToCsv(sheet){const arr=XLSX.utils.sheet_to_json(sheet,{header:1,raw:false,defval:''});return arr.filter(r=>r.some(c=>String(c).trim()!=='')).map(r=>r.map(c=>String(c??'').replace(/\r?\n/g,' ')).join(';')).join('\n')}
+function achar(wb,nomes){const targets=nomes.map(key);const name=wb.SheetNames.find(n=>targets.includes(key(n)));return name?wb.Sheets[name]:null}
+document.getElementById('upload').addEventListener('change',e=>{const file=e.target.files[0];if(!file)return;const reader=new FileReader();reader.onload=ev=>{try{const wb=XLSX.read(ev.target.result,{type:'array',cellDates:false});const map=[['escala',['ESCALA_DIA_SEGUINTE','ESCALA_OFICIAL','ESCALA']],['ocorr',['OCORRENCIAS_DIA_ATUAL','OCORRÊNCIAS_DIA_ATUAL','OCORRENCIAS','OCORRÊNCIAS']],['depara',['DE_PARA_MOTORISTAS','DE_PARA','MOTORISTAS']],['excecoes',['EXCECOES_INTERJORNADA','EXCEÇÕES_INTERJORNADA','SEM_INTERJORNADA']],['equip',['EQUIPAMENTOS','FROTA']],['param',['PARAMETROS','PARÂMETROS']]];map.forEach(([k,nomes])=>{const s=achar(wb,nomes);if(s)state[k]=sheetToCsv(s)});const hist=achar(wb,['HISTORICO_ROTAS','HISTÓRICO_ROTAS','HISTORICO']);if(hist){const linhas=parseCSV(sheetToCsv(hist)).map(r=>({data:get(r,['DATA']),rota:get(r,['ROTA']),placa:get(r,['PLACA']),motorista:get(r,['MOTORISTA']),nivel:get(r,['NIVEL_RISCO']),score:Number(get(r,['SCORE'])||0),motivos:get(r,['OBSERVACAO','MOTIVO','MOTIVOS']),acoes:get(r,['ACOES_TOMADAS','AÇÕES']),salvoEm:new Date().toISOString()})).filter(r=>r.rota);state.historico=[...state.historico,...linhas];localStorage.setItem('historico_predicao_rotas_cco',JSON.stringify(state.historico))}setMsg('Arquivo importado: '+file.name);state.tab='pred';render()}catch(err){setMsg('Erro ao importar: '+err.message)}};reader.readAsArrayBuffer(file)});
+document.querySelectorAll('.tabs button').forEach(b=>b.onclick=()=>{state.tab=b.dataset.tab;render()});
+function download(nome,conteudo,type='text/csv;charset=utf-8'){const blob=new Blob([conteudo],{type});const url=URL.createObjectURL(blob);const a=document.createElement('a');a.href=url;a.download=nome;a.click();URL.revokeObjectURL(url)}
+document.getElementById('modelo').onclick=()=>{const wb=XLSX.utils.book_new();const add=(n,csv)=>XLSX.utils.book_append_sheet(wb,XLSX.utils.aoa_to_sheet(csv.split(/\r?\n/).map(l=>l.split(';'))),n);add('ESCALA_DIA_SEGUINTE',exemploEscala);add('OCORRENCIAS_DIA_ATUAL',exemploOcorrencias);add('DE_PARA_MOTORISTAS',exemploDePara);add('EXCECOES_INTERJORNADA',exemploExcecoes);add('EQUIPAMENTOS',exemploEquip);add('PARAMETROS',exemploParam);add('HISTORICO_ROTAS','DATA;ROTA;PLACA;REBOQUE;MOTORISTA;INICIO;RETORNO_PREV;TEMPO;NIVEL_RISCO;SCORE;MOTIVOS;ACOES;SALVO_EM');XLSX.writeFile(wb,'PADRAO_IMPORTACAO_PREDICAO_ROTAS_CCO.xlsx')};
+document.getElementById('salvar').onclick=()=>{const novos=gerar().map(p=>({data:p.data,rota:p.rota,placa:p.placa,reboque:p.reboque,motorista:p.motorista,inicio:p.inicio,retornoPrev:p.retornoPrev,tempo:dur(p.tempoRotaMin),nivel:p.nivel,score:p.score,motivos:p.motivos.join(' | '),acoes:p.acoes.join(' | '),salvoEm:new Date().toISOString()}));state.historico=[...state.historico,...novos];localStorage.setItem('historico_predicao_rotas_cco',JSON.stringify(state.historico));setMsg(`${novos.length} rotas salvas no histórico local.`);render()};
+document.getElementById('exportar').onclick=()=>{const h=['DATA','ROTA','PLACA','REBOQUE','MOTORISTA','INICIO','RETORNO_PREV','TEMPO','NIVEL_RISCO','SCORE','MOTIVOS','ACOES','SALVO_EM'];const linhas=state.historico.map(x=>[x.data,x.rota,x.placa,x.reboque||'',x.motorista,x.inicio||'',x.retornoPrev||'',x.tempo||'',x.nivel,x.score,x.motivos,x.acoes,x.salvoEm].join(';'));download('historico_predicao_rotas.csv',[h.join(';'),...linhas].join('\n'))};
+document.getElementById('limpar').onclick=()=>{state.historico=[];localStorage.removeItem('historico_predicao_rotas_cco');setMsg('Histórico local limpo.');render()};
+function render(){document.querySelectorAll('.tabs button').forEach(b=>b.classList.toggle('active',b.dataset.tab===state.tab));const p=gerar();document.getElementById('kAlto').textContent=p.filter(x=>x.nivel==='Alto').length;document.getElementById('kMedio').textContent=p.filter(x=>x.nivel==='Médio').length;document.getElementById('kBaixo').textContent=p.filter(x=>x.nivel==='Baixo').length;document.getElementById('kInter').textContent=p.filter(x=>x.interjornadas.some(i=>i.status!=='OK'&&i.status!=='Desconsiderado')).length;const c=document.getElementById('content');if(state.tab==='pred'){c.innerHTML='<section class="card">'+(p.length?`<div style="overflow-x:auto"><table><thead><tr><th>Risco</th><th>Rota</th><th>Início</th><th>Motorista</th><th>Placa</th><th>Tempo</th><th>Interjornada</th><th>Motivos</th><th>Ações</th></tr></thead><tbody>${p.map(x=>`<tr><td><span class="pill ${x.nivel==='Alto'?'alto':x.nivel==='Médio'?'medio':'baixo'}">${x.nivel} • ${x.score}</span></td><td><b>${x.rota}</b></td><td class="cyan nowrap">${x.inicio}</td><td>${x.motoristas.map(m=>`${m.nome}${m.total>1?' ('+m.papel+')':''}`).join(' → ')}</td><td class="nowrap"><code>${x.placa}${x.reboque&&!x.reboque.includes('***')?' / '+x.reboque:''}</code></td><td>${dur(x.tempoRotaMin)}<br><span class="mini">Ret. ${x.retornoPrev}</span></td><td>${x.interjornadas.length?x.interjornadas.map(j=>`<div class="ij"><b>${j.status}</b><div class="mini">${j.motorista}</div><div class="mini">Hoje: ${j.hoje}</div><div class="mini">Amanhã: ${j.amanha}</div><div class="mini">Descanso: ${dur(j.descanso)}</div>${j.deficit>0?`<div class="red mini">Déficit: ${dur(j.deficit)}</div>`:''}</div>`).join(''):'<span class="mini">Sem vínculo</span>'}</td><td><ul class="list">${x.motivos.map(m=>`<li>${m}</li>`).join('')}</ul></td><td><ul class="list">${x.acoes.map(a=>`<li>${a}</li>`).join('')}</ul></td></tr>`).join('')}</tbody></table></div>`:'<div class="sub">Nenhuma rota encontrada para DATA_AMANHA. Importe a escala com a data do próximo dia.</div>')+'</section>'}else if(state.tab==='dados'){const fields=[['ESCALA_DIA_SEGUINTE','escala'],['OCORRENCIAS_DIA_ATUAL','ocorr'],['DE_PARA_MOTORISTAS','depara'],['EXCECOES_INTERJORNADA','excecoes'],['EQUIPAMENTOS','equip'],['PARAMETROS','param']];c.innerHTML=`<section class="grid">${fields.map(([t,k])=>`<div class="card"><h3>${t}</h3><textarea data-field="${k}">${state[k]}</textarea></div>`).join('')}</section>`;c.querySelectorAll('textarea').forEach(t=>t.oninput=e=>{state[e.target.dataset.field]=e.target.value;});}else if(state.tab==='hist'){c.innerHTML=`<section class="card"><h2>Histórico local</h2><p class="sub">Fica salvo no navegador. Use Exportar histórico para backup.</p><div class="hist"><table><thead><tr><th>Data</th><th>Rota</th><th>Placa</th><th>Motorista</th><th>Risco</th><th>Score</th><th>Motivos</th></tr></thead><tbody>${[...state.historico].reverse().map(h=>`<tr><td>${h.data||''}</td><td>${h.rota||''}</td><td>${h.placa||''}</td><td>${h.motorista||''}</td><td>${h.nivel||''}</td><td>${h.score||''}</td><td class="mini">${h.motivos||''}</td></tr>`).join('')}</tbody></table></div></section>`}else{c.innerHTML=`<section class="card"><h2>Padrão do Excel</h2><p class="sub">Crie um arquivo .xlsx com estas abas exatas. O botão “Baixar modelo Excel” gera tudo pronto.</p><div class="code">Abas obrigatórias/recomendadas:\n\nESCALA_DIA_SEGUINTE\nOCORRENCIAS_DIA_ATUAL\nDE_PARA_MOTORISTAS\nEXCECOES_INTERJORNADA\nEQUIPAMENTOS\nPARAMETROS\nHISTORICO_ROTAS\n\nA predição usa DATA_HOJE e DATA_AMANHA da aba PARAMETROS.</div></section>`}}
+render();
+</script>
+</body>
+</html>
